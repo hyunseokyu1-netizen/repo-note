@@ -2,6 +2,14 @@
 
 All notable changes to RepoNote are documented in this file.
 
+## 1.0.2 (2026-07-18)
+
+### Added
+- 파일을 길게 눌러 드래그하면 다른 폴더로 옮길 수 있다. 트리 하단의 드롭 영역에 놓으면
+  최상위 폴더로 이동한다.
+- Drag a file (long-press) to move it into another folder. Drop it on the zone at the
+  bottom of the tree to move it to the root folder.
+
 ## 1.0.1 (2026-07-17)
 
 ### Added
