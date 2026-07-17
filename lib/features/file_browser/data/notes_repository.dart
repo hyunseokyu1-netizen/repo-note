@@ -361,7 +361,7 @@ class NotesRepository {
     final slash = file.path.lastIndexOf('/');
     final dir = slash < 0 ? '' : file.path.substring(0, slash);
     final newPath = FileNameValidator.joinPath(dir, newName);
-    await _relocate(vault, file, newPath, newName);
+    await _movePath(vault, file.path, newPath);
   }
 
   // ---------- 이동 (드래그 앤 드롭) ----------
@@ -376,45 +376,115 @@ class NotesRepository {
     final file = await _db.getFile(fileId);
     if (file == null) throw const NotFoundFailure();
     final newPath = FileNameValidator.joinPath(targetDir, file.name);
-    await _relocate(vault, file, newPath, file.name);
+    await _movePath(vault, file.path, newPath);
   }
 
-  /// 파일을 [newPath]로 옮기는 공통 로직 (이름 변경/이동 공용).
-  /// GitHub Contents API 특성상 "새 경로 생성 → 기존 경로 삭제"로 처리한다.
-  Future<void> _relocate(
-    VaultConfig vault,
-    NoteFile file,
-    String newPath,
-    String newName,
-  ) async {
-    if (newPath == file.path) return;
+  /// 폴더 안의 모든 파일 경로를 재귀적으로 수집한다 (서버 기준).
+  Future<List<String>> filesUnder(VaultConfig vault, String folderPath) async {
+    final result = <String>[];
+    Future<void> walk(String dir) async {
+      final entries = await _api.listContents(
+        vault.owner,
+        vault.repository,
+        dir,
+        vault.branch,
+      );
+      for (final e in entries) {
+        if (e.isDir) {
+          await walk(e.path);
+        } else if (e.isFile) {
+          result.add(e.path);
+        }
+      }
+    }
 
+    await walk(folderPath);
+    return result;
+  }
+
+  /// 폴더를 [targetParentDir] 아래로 옮긴다. 하위 파일을 하나씩 재생성·삭제한다.
+  /// [files]를 미리 넘기면 다시 조회하지 않는다. 이동한 파일 수를 반환한다.
+  Future<int> moveFolder(
+    VaultConfig vault,
+    String folderPath,
+    String targetParentDir, {
+    List<String>? files,
+  }) async {
+    final folderName = folderPath.contains('/')
+        ? folderPath.substring(folderPath.lastIndexOf('/') + 1)
+        : folderPath;
+    final newFolderPath = FileNameValidator.joinPath(
+      targetParentDir,
+      folderName,
+    );
+    if (newFolderPath == folderPath) return 0;
+    // 자기 자신이나 하위 폴더로는 옮길 수 없다.
+    if (targetParentDir == folderPath ||
+        targetParentDir.startsWith('$folderPath/')) {
+      throw const ValidationFailure(ValidationErrorKind.moveIntoSelf);
+    }
+
+    final list = files ?? await filesUnder(vault, folderPath);
+    for (final oldPath in list) {
+      final rel = oldPath.substring(folderPath.length); // 앞에 '/' 포함
+      await _movePath(vault, oldPath, '$newFolderPath$rel');
+    }
+    return list.length;
+  }
+
+  /// 파일을 [oldPath]에서 [newPath]로 옮기는 공통 로직 (이름 변경/이동 공용).
+  /// GitHub Contents API 특성상 "새 경로 생성 → 기존 경로 삭제"로 처리한다.
+  /// DB에 없는 파일(미로드 하위 파일)도 서버에서 직접 내용을 받아 처리한다.
+  Future<void> _movePath(
+    VaultConfig vault,
+    String oldPath,
+    String newPath,
+  ) async {
+    if (newPath == oldPath) return;
+
+    final oldId = fileIdFor(vault.id, oldPath);
     final newId = fileIdFor(vault.id, newPath);
+    final oldFile = await _db.getFile(oldId);
+
     final dup = await _db.getFile(newId);
     if (dup != null && !dup.isDeletedLocally) {
       throw const ValidationFailure(ValidationErrorKind.duplicateName);
     }
 
+    final newName = newPath.contains('/')
+        ? newPath.substring(newPath.lastIndexOf('/') + 1)
+        : newPath;
+
     // 현재 내용 확보: 초안 → 캐시 → 서버
-    final draft = await _db.getDraft(file.id);
+    final draft = await _db.getDraft(oldId);
     String? content = draft?.content;
-    content ??= await _cache.read(vault.id, file.path);
+    content ??= await _cache.read(vault.id, oldPath);
     if (content == null) {
       final dto = await _api.getFile(
         vault.owner,
         vault.repository,
-        file.path,
+        oldPath,
         vault.branch,
       );
       content = GitHubContentCodec.decode(dto.contentBase64);
     }
+
+    // 삭제에 쓸 기존 SHA (DB → 서버 순)
+    final oldSha =
+        oldFile?.remoteSha ??
+        await _api.getFileSha(
+          vault.owner,
+          vault.repository,
+          oldPath,
+          vault.branch,
+        );
 
     // 1) 새 경로에 생성
     final put = await _api.putFile(
       owner: vault.owner,
       repo: vault.repository,
       path: newPath,
-      message: 'Move ${file.path} to $newPath from mobile',
+      message: 'Move $oldPath to $newPath from mobile',
       contentBase64: GitHubContentCodec.encode(content),
       branch: vault.branch,
     );
@@ -445,42 +515,36 @@ class NotesRepository {
     );
 
     // 2) 기존 경로 삭제 (서버에 존재하는 경우)
-    if (file.remoteSha != null) {
+    if (oldSha != null) {
       try {
-        final sha =
-            await _api.getFileSha(
-              vault.owner,
-              vault.repository,
-              file.path,
-              vault.branch,
-            ) ??
-            file.remoteSha!;
         await _api.deleteFile(
           owner: vault.owner,
           repo: vault.repository,
-          path: file.path,
-          message: 'Move ${file.path} to $newPath from mobile',
-          sha: sha,
+          path: oldPath,
+          message: 'Move $oldPath to $newPath from mobile',
+          sha: oldSha,
           branch: vault.branch,
         );
       } on AppFailure {
         // 부분 실패: 새 파일은 생성됨. 기존 파일은 삭제 대기로 남긴다.
-        await _db.upsertFile(
-          file
-              .toCompanion(true)
-              .copyWith(
-                isDeletedLocally: const Value(true),
-                syncStatus: const Value(SyncStatus.pendingDelete),
-              ),
-        );
+        if (oldFile != null) {
+          await _db.upsertFile(
+            oldFile
+                .toCompanion(true)
+                .copyWith(
+                  isDeletedLocally: const Value(true),
+                  syncStatus: const Value(SyncStatus.pendingDelete),
+                ),
+          );
+        }
         throw const ValidationFailure(ValidationErrorKind.renamePartialFailure);
       }
     }
 
-    await _cache.delete(vault.id, file.path);
-    await _db.deleteDraft(file.id);
-    await _db.deleteJobsForFile(file.id);
-    await _db.deleteFileRow(file.id);
+    await _cache.delete(vault.id, oldPath);
+    await _db.deleteDraft(oldId);
+    await _db.deleteJobsForFile(oldId);
+    await _db.deleteFileRow(oldId);
   }
 
   // ---------- 검색 ----------

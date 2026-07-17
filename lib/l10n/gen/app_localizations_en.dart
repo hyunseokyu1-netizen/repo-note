@@ -140,6 +140,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get moveToRoot => 'Drop here to move to the root folder';
 
   @override
+  String get moveFolderMenu => 'Move to folder…';
+
+  @override
+  String get folderPickerTitle => 'Choose destination';
+
+  @override
+  String get moveHere => 'Move here';
+
+  @override
+  String get movingFolder => 'Moving folder…';
+
+  @override
+  String moveFolderConfirm(int count) {
+    return 'This will move $count file(s) in this folder. A commit is created per file. Continue?';
+  }
+
+  @override
+  String get moveFolderEmpty => 'This folder has no files to move.';
+
+  @override
+  String moveFolderDone(int count) {
+    return 'Moved $count file(s).';
+  }
+
+  @override
   String get deleteFileTitle => 'Delete file';
 
   @override
@@ -416,4 +441,8 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get errRenamePartial =>
       'The new file was created but deleting the old file failed. It will be retried during sync.';
+
+  @override
+  String get errMoveIntoSelf =>
+      'You can\'t move a folder into itself or one of its subfolders.';
 }

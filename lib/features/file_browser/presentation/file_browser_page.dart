@@ -16,6 +16,7 @@ import '../../sync/data/sync_coordinator.dart';
 import '../../sync/domain/sync_result.dart';
 import '../data/notes_repository.dart';
 import '../domain/browser_entry.dart';
+import 'folder_picker_dialog.dart';
 
 /// 트리 뷰의 한 행 (평탄화된 항목).
 class _TreeRow {
@@ -295,6 +296,65 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
     await _refreshAll();
   }
 
+  /// 폴더를 메뉴로 다른 폴더에 이동한다 (대상 폴더 선택 → 확인 → 하위 파일 이동).
+  Future<void> _moveFolder(BrowserEntry folder) async {
+    final vault = _vault;
+    if (vault == null || !folder.isDir) return;
+
+    final targetDir = await FolderPickerDialog.show(
+      context,
+      vault: vault,
+      excludePath: folder.fullPath,
+    );
+    if (targetDir == null || !mounted) return;
+
+    // 이미 있는 위치면 무시
+    final slash = folder.fullPath.lastIndexOf('/');
+    final currentParent = slash < 0 ? '' : folder.fullPath.substring(0, slash);
+    if (targetDir == currentParent) return;
+
+    final repo = ref.read(notesRepositoryProvider);
+    try {
+      final files = await repo.filesUnder(vault, folder.fullPath);
+      if (!mounted) return;
+      if (files.isEmpty) {
+        _showSnack(_l10n.moveFolderEmpty);
+        return;
+      }
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: Text(_l10n.moveFolderMenu),
+          content: Text(_l10n.moveFolderConfirm(files.length)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: Text(_l10n.cancel),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: Text(_l10n.proceed),
+            ),
+          ],
+        ),
+      );
+      if (confirmed != true || !mounted) return;
+
+      _showSnack(_l10n.movingFolder);
+      final moved = await repo.moveFolder(
+        vault,
+        folder.fullPath,
+        targetDir,
+        files: files,
+      );
+      if (targetDir.isNotEmpty) _expanded.add(targetDir);
+      if (mounted) _showSnack(_l10n.moveFolderDone(moved));
+    } on AppFailure catch (e) {
+      if (mounted) _showSnack(failureMessage(context, e));
+    }
+    await _refreshAll();
+  }
+
   Future<void> _delete(BrowserEntry entry) async {
     if (entry.fileId == null) return;
     final confirmed = await showDialog<bool>(
@@ -348,6 +408,14 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
                 onTap: () {
                   Navigator.pop(sheetContext);
                   _createFolder(entry.fullPath);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.drive_file_move_outline),
+                title: Text(_l10n.moveFolderMenu),
+                onTap: () {
+                  Navigator.pop(sheetContext);
+                  _moveFolder(entry);
                 },
               ),
             ] else if (entry.fileId != null) ...[

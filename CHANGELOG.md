@@ -9,6 +9,13 @@ All notable changes to RepoNote are documented in this file.
   최상위 폴더로 이동한다.
 - Drag a file (long-press) to move it into another folder. Drop it on the zone at the
   bottom of the tree to move it to the root folder.
+- 폴더 길게 누르기 메뉴에 "폴더로 이동…" 추가. 대상 폴더를 골라 폴더 전체를 옮긴다.
+- Added "Move to folder…" to the folder long-press menu to relocate an entire folder.
+
+### Fixed
+- 파일 길게 누르기가 메뉴 대신 드래그를 시작하도록 수정. 파일 메뉴는 우측 더보기(⋮) 버튼으로 이동.
+- Long-pressing a file now starts a drag instead of opening the menu; the file menu moved
+  to the trailing more (⋮) button.
 
 ## 1.0.1 (2026-07-17)
 

@@ -88,6 +88,7 @@ enum ValidationErrorKind {
   specialChars,
   duplicateName,
   renamePartialFailure,
+  moveIntoSelf,
 }
 
 class ValidationFailure extends AppFailure {

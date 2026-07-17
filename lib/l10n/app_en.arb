@@ -47,6 +47,15 @@
   "movingFile": "Moving…",
   "moveDone": "Moved.",
   "moveToRoot": "Drop here to move to the root folder",
+  "moveFolderMenu": "Move to folder…",
+  "folderPickerTitle": "Choose destination",
+  "moveHere": "Move here",
+  "movingFolder": "Moving folder…",
+  "moveFolderConfirm": "This will move {count} file(s) in this folder. A commit is created per file. Continue?",
+  "@moveFolderConfirm": {"placeholders": {"count": {"type": "int"}}},
+  "moveFolderEmpty": "This folder has no files to move.",
+  "moveFolderDone": "Moved {count} file(s).",
+  "@moveFolderDone": {"placeholders": {"count": {"type": "int"}}},
   "deleteFileTitle": "Delete file",
   "deleteFileConfirm": "Delete {name}?\nIt will also be deleted from GitHub on the next sync.",
   "@deleteFileConfirm": {"placeholders": {"name": {"type": "String"}}},
@@ -143,5 +152,6 @@
   "errNameDots": "File names cannot contain \"..\".",
   "errNameSpecial": "File names cannot contain \\ : * ? \" < > | characters.",
   "errNameDuplicate": "A file with the same name already exists.",
-  "errRenamePartial": "The new file was created but deleting the old file failed. It will be retried during sync."
+  "errRenamePartial": "The new file was created but deleting the old file failed. It will be retried during sync.",
+  "errMoveIntoSelf": "You can't move a folder into itself or one of its subfolders."
 }

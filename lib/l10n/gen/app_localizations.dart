@@ -344,6 +344,48 @@ abstract class AppLocalizations {
   /// **'Drop here to move to the root folder'**
   String get moveToRoot;
 
+  /// No description provided for @moveFolderMenu.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to folder…'**
+  String get moveFolderMenu;
+
+  /// No description provided for @folderPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose destination'**
+  String get folderPickerTitle;
+
+  /// No description provided for @moveHere.
+  ///
+  /// In en, this message translates to:
+  /// **'Move here'**
+  String get moveHere;
+
+  /// No description provided for @movingFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving folder…'**
+  String get movingFolder;
+
+  /// No description provided for @moveFolderConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'This will move {count} file(s) in this folder. A commit is created per file. Continue?'**
+  String moveFolderConfirm(int count);
+
+  /// No description provided for @moveFolderEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'This folder has no files to move.'**
+  String get moveFolderEmpty;
+
+  /// No description provided for @moveFolderDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved {count} file(s).'**
+  String moveFolderDone(int count);
+
   /// No description provided for @deleteFileTitle.
   ///
   /// In en, this message translates to:
@@ -835,6 +877,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'The new file was created but deleting the old file failed. It will be retried during sync.'**
   String get errRenamePartial;
+
+  /// No description provided for @errMoveIntoSelf.
+  ///
+  /// In en, this message translates to:
+  /// **'You can\'t move a folder into itself or one of its subfolders.'**
+  String get errMoveIntoSelf;
 }
 
 class _AppLocalizationsDelegate

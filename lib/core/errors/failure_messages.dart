@@ -28,5 +28,6 @@ String validationMessage(BuildContext context, ValidationErrorKind kind) {
     ValidationErrorKind.specialChars => l10n.errNameSpecial,
     ValidationErrorKind.duplicateName => l10n.errNameDuplicate,
     ValidationErrorKind.renamePartialFailure => l10n.errRenamePartial,
+    ValidationErrorKind.moveIntoSelf => l10n.errMoveIntoSelf,
   };
 }

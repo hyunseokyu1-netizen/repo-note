@@ -139,6 +139,31 @@ class AppLocalizationsKo extends AppLocalizations {
   String get moveToRoot => '여기에 놓으면 최상위 폴더로 이동합니다';
 
   @override
+  String get moveFolderMenu => '폴더로 이동…';
+
+  @override
+  String get folderPickerTitle => '이동할 위치 선택';
+
+  @override
+  String get moveHere => '여기로 이동';
+
+  @override
+  String get movingFolder => '폴더 이동 중…';
+
+  @override
+  String moveFolderConfirm(int count) {
+    return '이 폴더의 파일 $count개를 이동합니다. 파일마다 커밋이 생성됩니다. 계속할까요?';
+  }
+
+  @override
+  String get moveFolderEmpty => '이 폴더에는 이동할 파일이 없습니다.';
+
+  @override
+  String moveFolderDone(int count) {
+    return '$count개 파일을 이동했습니다.';
+  }
+
+  @override
   String get deleteFileTitle => '파일 삭제';
 
   @override
@@ -404,4 +429,7 @@ class AppLocalizationsKo extends AppLocalizations {
   @override
   String get errRenamePartial =>
       '새 파일은 만들었지만 기존 파일 삭제에 실패했습니다. 동기화에서 다시 시도합니다.';
+
+  @override
+  String get errMoveIntoSelf => '폴더를 자기 자신이나 하위 폴더로 옮길 수 없습니다.';
 }
