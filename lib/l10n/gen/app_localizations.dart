@@ -326,6 +326,24 @@ abstract class AppLocalizations {
   /// **'Renamed.'**
   String get renameDone;
 
+  /// No description provided for @movingFile.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving…'**
+  String get movingFile;
+
+  /// No description provided for @moveDone.
+  ///
+  /// In en, this message translates to:
+  /// **'Moved.'**
+  String get moveDone;
+
+  /// No description provided for @moveToRoot.
+  ///
+  /// In en, this message translates to:
+  /// **'Drop here to move to the root folder'**
+  String get moveToRoot;
+
   /// No description provided for @deleteFileTitle.
   ///
   /// In en, this message translates to:

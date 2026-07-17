@@ -131,6 +131,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get renameDone => 'Renamed.';
 
   @override
+  String get movingFile => 'Moving…';
+
+  @override
+  String get moveDone => 'Moved.';
+
+  @override
+  String get moveToRoot => 'Drop here to move to the root folder';
+
+  @override
   String get deleteFileTitle => 'Delete file';
 
   @override

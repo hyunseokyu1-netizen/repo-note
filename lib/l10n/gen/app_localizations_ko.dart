@@ -130,6 +130,15 @@ class AppLocalizationsKo extends AppLocalizations {
   String get renameDone => '이름을 변경했습니다.';
 
   @override
+  String get movingFile => '이동 중…';
+
+  @override
+  String get moveDone => '이동했습니다.';
+
+  @override
+  String get moveToRoot => '여기에 놓으면 최상위 폴더로 이동합니다';
+
+  @override
   String get deleteFileTitle => '파일 삭제';
 
   @override

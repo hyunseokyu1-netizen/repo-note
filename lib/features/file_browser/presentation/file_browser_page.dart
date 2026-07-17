@@ -41,6 +41,12 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   bool _offline = false;
   String? _error;
 
+  /// 드래그 중 하이라이트할 드롭 대상 폴더 경로 (루트는 빈 문자열, 없으면 null).
+  String? _dropTargetDir;
+
+  /// 현재 드래그 중인지 여부 (루트 드롭 영역 표시용).
+  bool _dragging = false;
+
   VaultConfig? get _vault => ref.read(sessionControllerProvider).value?.vault;
 
   String get _rootPath => _vault?.rootPath ?? '';
@@ -265,6 +271,30 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
     await _refreshAll();
   }
 
+  /// 드래그 앤 드롭으로 파일을 [targetDir] 폴더로 이동한다.
+  Future<void> _moveTo(BrowserEntry file, String targetDir) async {
+    final vault = _vault;
+    if (vault == null || file.fileId == null) return;
+
+    // 이미 그 폴더에 있으면 무시
+    final slash = file.fullPath.lastIndexOf('/');
+    final currentDir = slash < 0 ? '' : file.fullPath.substring(0, slash);
+    if (currentDir == targetDir) return;
+
+    _showSnack(_l10n.movingFile);
+    try {
+      await ref
+          .read(notesRepositoryProvider)
+          .moveToFolder(vault, file.fileId!, targetDir);
+      // 대상 폴더가 펼쳐져 있으면 이동 결과가 바로 보이도록 갱신
+      if (targetDir.isNotEmpty) _expanded.add(targetDir);
+      if (mounted) _showSnack(_l10n.moveDone);
+    } on AppFailure catch (e) {
+      if (mounted) _showSnack(failureMessage(context, e));
+    }
+    await _refreshAll();
+  }
+
   Future<void> _delete(BrowserEntry entry) async {
     if (entry.fileId == null) return;
     final confirmed = await showDialog<bool>(
@@ -431,54 +461,96 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
 
   Widget _buildRow(_TreeRow row) {
     final entry = row.entry;
+    if (entry.isDir) return _buildFolderRow(row);
+    return _buildFileRow(row);
+  }
+
+  Widget _buildFolderRow(_TreeRow row) {
+    final entry = row.entry;
     final scheme = Theme.of(context).colorScheme;
     final indent = 20.0 * row.depth;
     final isExpanded = _expanded.contains(entry.fullPath);
     final isLoadingDir = _loadingDirs.contains(entry.fullPath);
 
-    if (entry.isDir) {
-      return InkWell(
-        onTap: () => _toggleFolder(entry),
-        onLongPress: () => _showEntryActions(entry),
-        child: SizedBox(
-          height: 44,
-          child: Row(
-            children: [
-              SizedBox(width: 12 + indent),
-              isLoadingDir
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : Icon(
-                      isExpanded
-                          ? Icons.keyboard_arrow_down
-                          : Icons.chevron_right,
-                      size: 20,
-                      color: scheme.onSurfaceVariant,
-                    ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  entry.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
+    final content = InkWell(
+      onTap: () => _toggleFolder(entry),
+      onLongPress: () => _showEntryActions(entry),
+      child: SizedBox(
+        height: 44,
+        child: Row(
+          children: [
+            SizedBox(width: 12 + indent),
+            isLoadingDir
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : Icon(
+                    isExpanded
+                        ? Icons.keyboard_arrow_down
+                        : Icons.chevron_right,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
                   ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                entry.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w500,
                 ),
               ),
-              const SizedBox(width: 12),
-            ],
-          ),
+            ),
+            const SizedBox(width: 12),
+          ],
         ),
-      );
-    }
+      ),
+    );
 
+    // 폴더는 파일을 드롭받는 대상이 된다.
+    return DragTarget<BrowserEntry>(
+      onWillAcceptWithDetails: (details) {
+        final slash = details.data.fullPath.lastIndexOf('/');
+        final currentDir = slash < 0
+            ? ''
+            : details.data.fullPath.substring(0, slash);
+        return currentDir != entry.fullPath;
+      },
+      onAcceptWithDetails: (details) => _moveTo(details.data, entry.fullPath),
+      onMove: (_) {
+        if (_dropTargetDir != entry.fullPath) {
+          setState(() => _dropTargetDir = entry.fullPath);
+        }
+      },
+      onLeave: (_) {
+        if (_dropTargetDir == entry.fullPath) {
+          setState(() => _dropTargetDir = null);
+        }
+      },
+      builder: (context, candidate, rejected) {
+        final highlighted = _dropTargetDir == entry.fullPath;
+        return Container(
+          color: highlighted ? scheme.primaryContainer : null,
+          child: content,
+        );
+      },
+    );
+  }
+
+  Widget _buildFileRow(_TreeRow row) {
+    final entry = row.entry;
+    final scheme = Theme.of(context).colorScheme;
+    final indent = 20.0 * row.depth;
     final badge = _statusBadge(entry);
-    return InkWell(
+    final displayName = entry.name.toLowerCase().endsWith('.md')
+        ? entry.name.substring(0, entry.name.length - 3)
+        : entry.name;
+
+    final content = InkWell(
       onTap: () => _openFile(entry),
       onLongPress: () => _showEntryActions(entry),
       child: SizedBox(
@@ -491,9 +563,7 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
             const SizedBox(width: 22),
             Expanded(
               child: Text(
-                entry.name.toLowerCase().endsWith('.md')
-                    ? entry.name.substring(0, entry.name.length - 3)
-                    : entry.name,
+                displayName,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -507,6 +577,93 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
           ],
         ),
       ),
+    );
+
+    // 편집 가능한 Markdown 파일만 드래그로 이동할 수 있다.
+    if (entry.fileId == null) return content;
+
+    final feedback = Material(
+      elevation: 6,
+      borderRadius: BorderRadius.circular(8),
+      color: scheme.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.description_outlined, size: 18, color: scheme.primary),
+            const SizedBox(width: 8),
+            Text(displayName, style: const TextStyle(fontSize: 15)),
+          ],
+        ),
+      ),
+    );
+
+    return LongPressDraggable<BrowserEntry>(
+      data: entry,
+      feedback: feedback,
+      childWhenDragging: Opacity(opacity: 0.4, child: content),
+      onDragStarted: () => setState(() => _dragging = true),
+      onDragEnd: (_) => setState(() {
+        _dragging = false;
+        _dropTargetDir = null;
+      }),
+      child: content,
+    );
+  }
+
+  /// 트리 하단의 "루트로 이동" 드롭 영역 (드래그 중에만 표시).
+  Widget _buildRootDropZone() {
+    final scheme = Theme.of(context).colorScheme;
+    return DragTarget<BrowserEntry>(
+      onWillAcceptWithDetails: (details) {
+        final slash = details.data.fullPath.lastIndexOf('/');
+        final currentDir = slash < 0
+            ? ''
+            : details.data.fullPath.substring(0, slash);
+        return currentDir != _rootPath;
+      },
+      onAcceptWithDetails: (details) => _moveTo(details.data, _rootPath),
+      onMove: (_) {
+        if (_dropTargetDir != _rootPath) {
+          setState(() => _dropTargetDir = _rootPath);
+        }
+      },
+      onLeave: (_) {
+        if (_dropTargetDir == _rootPath) {
+          setState(() => _dropTargetDir = null);
+        }
+      },
+      builder: (context, candidate, rejected) {
+        final highlighted = _dropTargetDir == _rootPath;
+        return Container(
+          margin: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          decoration: BoxDecoration(
+            color: highlighted ? scheme.primaryContainer : null,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: highlighted ? scheme.primary : scheme.outlineVariant,
+              style: BorderStyle.solid,
+            ),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.drive_folder_upload_outlined,
+                size: 18,
+                color: scheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _l10n.moveToRoot,
+                style: TextStyle(color: scheme.onSurfaceVariant),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -603,8 +760,12 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
                     )
                   : ListView.builder(
                       padding: const EdgeInsets.only(top: 4, bottom: 96),
-                      itemCount: rows.length,
-                      itemBuilder: (context, index) => _buildRow(rows[index]),
+                      // 드래그 중에는 마지막에 "루트로 이동" 드롭 영역을 추가한다.
+                      itemCount: rows.length + (_dragging ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index >= rows.length) return _buildRootDropZone();
+                        return _buildRow(rows[index]);
+                      },
                     ),
             ),
           ),
