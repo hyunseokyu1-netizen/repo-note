@@ -5,6 +5,16 @@ GitHub 저장소를 Obsidian Vault처럼 사용하는 개인용 모바일 메모
 GitHub REST API(Contents API)로 Markdown 파일을 조회·작성·수정·삭제하고 커밋 단위로 동기화한다.
 Git CLI, 전체 Clone, SSH 인증은 사용하지 않는다.
 
+## 만든 이유
+
+모바일에서 Obsidian과 Git을 연결하는 과정이 너무 복잡했다. 플러그인 설정은 번거롭고,
+막상 연결해도 충돌(conflict)이 나면 폰에서 해결하기가 정말 어려웠다.
+
+그래서 그냥 **Obsidian 저장소(GitHub)와 자동으로 동기화되는 메모 앱**을 직접 만들었다.
+앱을 열고 쓰기만 하면 알아서 커밋되고, 충돌이 나면 두 버전을 비교해서 고를 수 있다.
+
+처음에는 React Native로 만들었지만 에러가 너무 많아서, Flutter로 처음부터 다시 만들었다.
+
 ## 주요 기능 (MVP)
 
 - GitHub Fine-grained Personal Access Token 등록 및 검증
