@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart' show ThemeMode;
+import 'package:flutter/material.dart' show Locale, ThemeMode;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/providers.dart';
@@ -11,6 +11,7 @@ class AppSettingsState {
     this.showHidden = false,
     this.showNonMarkdown = false,
     this.themeMode = ThemeMode.system,
+    this.localeCode = '',
   });
 
   final bool autoSyncEnabled;
@@ -19,18 +20,26 @@ class AppSettingsState {
   final bool showNonMarkdown;
   final ThemeMode themeMode;
 
+  /// 앱 언어 코드. 빈 문자열이면 시스템 언어를 따른다.
+  final String localeCode;
+
+  /// MaterialApp에 전달할 Locale. null이면 시스템 언어.
+  Locale? get locale => localeCode.isEmpty ? null : Locale(localeCode);
+
   AppSettingsState copyWith({
     bool? autoSyncEnabled,
     int? autoSyncDelaySeconds,
     bool? showHidden,
     bool? showNonMarkdown,
     ThemeMode? themeMode,
+    String? localeCode,
   }) => AppSettingsState(
     autoSyncEnabled: autoSyncEnabled ?? this.autoSyncEnabled,
     autoSyncDelaySeconds: autoSyncDelaySeconds ?? this.autoSyncDelaySeconds,
     showHidden: showHidden ?? this.showHidden,
     showNonMarkdown: showNonMarkdown ?? this.showNonMarkdown,
     themeMode: themeMode ?? this.themeMode,
+    localeCode: localeCode ?? this.localeCode,
   );
 }
 
@@ -40,6 +49,7 @@ class SettingsController extends Notifier<AppSettingsState> {
   static const _kShowHidden = 'show_hidden';
   static const _kShowNonMd = 'show_non_md';
   static const _kThemeMode = 'theme_mode';
+  static const _kLocale = 'app_locale';
 
   AppDatabase get _db => ref.read(databaseProvider);
 
@@ -55,6 +65,7 @@ class SettingsController extends Notifier<AppSettingsState> {
     final showHidden = await _db.getSetting(_kShowHidden);
     final showNonMd = await _db.getSetting(_kShowNonMd);
     final theme = await _db.getSetting(_kThemeMode);
+    final locale = await _db.getSetting(_kLocale);
     state = AppSettingsState(
       autoSyncEnabled: autoSync != '0',
       autoSyncDelaySeconds: int.tryParse(delay ?? '') ?? 5,
@@ -64,6 +75,10 @@ class SettingsController extends Notifier<AppSettingsState> {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
         _ => ThemeMode.system,
+      },
+      localeCode: switch (locale) {
+        'ko' || 'en' => locale!,
+        _ => '',
       },
     );
   }
@@ -95,6 +110,12 @@ class SettingsController extends Notifier<AppSettingsState> {
       ThemeMode.dark => 'dark',
       ThemeMode.system => 'system',
     });
+  }
+
+  /// 앱 언어 변경. [code]는 'ko', 'en' 또는 ''(시스템).
+  Future<void> setLocaleCode(String code) async {
+    state = state.copyWith(localeCode: code);
+    await _db.setSetting(_kLocale, code);
   }
 }
 

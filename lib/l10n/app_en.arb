@@ -105,6 +105,8 @@
   "themeSystem": "System",
   "themeLight": "Light",
   "themeDark": "Dark",
+  "languageTitle": "Language",
+  "languageSystem": "System",
   "clearCacheTitle": "Clear cache",
   "clearCacheDesc": "Unsynced drafts are kept",
   "clearCacheConfirmClean": "Delete the synced document cache. Continue?",

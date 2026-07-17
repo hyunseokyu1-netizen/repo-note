@@ -18,6 +18,9 @@ class RepoNoteApp extends ConsumerWidget {
     final themeMode = ref.watch(
       settingsControllerProvider.select((s) => s.themeMode),
     );
+    final settingsLocale = ref.watch(
+      settingsControllerProvider.select((s) => s.locale),
+    );
 
     return MaterialApp.router(
       title: 'RepoNote',
@@ -25,8 +28,8 @@ class RepoNoteApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
-      // 기본은 시스템(핸드폰) 언어를 따라간다.
-      locale: localeOverride,
+      // 기본은 시스템(핸드폰) 언어. 설정에서 변경하면 그 언어를 따른다.
+      locale: localeOverride ?? settingsLocale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       routerConfig: router,

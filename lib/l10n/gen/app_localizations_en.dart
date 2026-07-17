@@ -302,6 +302,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get themeDark => 'Dark';
 
   @override
+  String get languageTitle => 'Language';
+
+  @override
+  String get languageSystem => 'System';
+
+  @override
   String get clearCacheTitle => 'Clear cache';
 
   @override

@@ -296,6 +296,12 @@ class AppLocalizationsKo extends AppLocalizations {
   String get themeDark => '다크';
 
   @override
+  String get languageTitle => '언어';
+
+  @override
+  String get languageSystem => '시스템';
+
+  @override
   String get clearCacheTitle => '캐시 삭제';
 
   @override

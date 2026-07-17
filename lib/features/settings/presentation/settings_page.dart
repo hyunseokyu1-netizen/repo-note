@@ -179,6 +179,21 @@ class _SettingsPageState extends ConsumerState<SettingsPage> {
             onChanged: controller.setShowNonMarkdown,
           ),
           ListTile(
+            leading: const Icon(Icons.language_outlined),
+            title: Text(l10n.languageTitle),
+            trailing: DropdownButton<String>(
+              value: settings.localeCode,
+              items: [
+                DropdownMenuItem(value: '', child: Text(l10n.languageSystem)),
+                const DropdownMenuItem(value: 'ko', child: Text('한국어')),
+                const DropdownMenuItem(value: 'en', child: Text('English')),
+              ],
+              onChanged: (v) {
+                if (v != null) controller.setLocaleCode(v);
+              },
+            ),
+          ),
+          ListTile(
             leading: const Icon(Icons.dark_mode_outlined),
             title: Text(l10n.themeTitle),
             trailing: DropdownButton<ThemeMode>(

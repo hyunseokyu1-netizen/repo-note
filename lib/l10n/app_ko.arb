@@ -98,6 +98,8 @@
   "themeSystem": "시스템",
   "themeLight": "라이트",
   "themeDark": "다크",
+  "languageTitle": "언어",
+  "languageSystem": "시스템",
   "clearCacheTitle": "캐시 삭제",
   "clearCacheDesc": "미동기화 초안은 유지됩니다",
   "clearCacheConfirmClean": "동기화된 문서 캐시를 삭제합니다. 계속할까요?",
