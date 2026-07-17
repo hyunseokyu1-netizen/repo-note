@@ -550,9 +550,11 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
         ? entry.name.substring(0, entry.name.length - 3)
         : entry.name;
 
+    // 편집 가능한 Markdown 파일만 드래그 이동·메뉴 버튼을 제공한다.
+    final hasActions = entry.fileId != null;
+
     final content = InkWell(
       onTap: () => _openFile(entry),
-      onLongPress: () => _showEntryActions(entry),
       child: SizedBox(
         height: 44,
         child: Row(
@@ -573,14 +575,27 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
               ),
             ),
             if (badge != null) ...[badge, const SizedBox(width: 4)],
-            const SizedBox(width: 12),
+            if (hasActions)
+              InkWell(
+                onTap: () => _showEntryActions(entry),
+                customBorder: const CircleBorder(),
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: Icon(
+                    Icons.more_vert,
+                    size: 20,
+                    color: scheme.onSurfaceVariant,
+                  ),
+                ),
+              )
+            else
+              const SizedBox(width: 12),
           ],
         ),
       ),
     );
 
-    // 편집 가능한 Markdown 파일만 드래그로 이동할 수 있다.
-    if (entry.fileId == null) return content;
+    if (!hasActions) return content;
 
     final feedback = Material(
       elevation: 6,
