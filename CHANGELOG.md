@@ -2,6 +2,18 @@
 
 All notable changes to RepoNote are documented in this file.
 
+## 1.0.3 (2026-07-20)
+
+### Added
+- 미리보기에서 `[[위키링크]]`를 탭 가능한 칩으로 표시하고, 탭하면 해당 노트로 이동한다
+  (`[[대상|별칭]]` 문법 지원, 원문은 변경하지 않음).
+- In preview, `[[wiki links]]` render as tappable chips that navigate to the linked note
+  (supports `[[target|alias]]`; the source text is never modified).
+
+### Changed
+- 노트를 열면 보기(미리보기) 모드가 기본이 되었다. 빈 노트는 편집 모드로 열린다.
+- Notes now open in preview mode by default; empty notes still open in edit mode.
+
 ## 1.0.2 (2026-07-18)
 
 ### Added
