@@ -547,6 +547,27 @@ class NotesRepository {
     await _db.deleteFileRow(oldId);
   }
 
+  // ---------- 위키링크 ----------
+
+  /// `[[위키링크]]` 대상 노트를 찾는다. Obsidian처럼 파일명(basename) 기준으로
+  /// 매칭하며, 'folder/Note' 형태면 경로 접미사로도 찾는다.
+  Future<NoteFile?> findByWikiName(VaultConfig vault, String target) async {
+    final t = target.toLowerCase();
+    final tMd = t.endsWith('.md') ? t : '$t.md';
+    final files = await _db.filesInVault(vault.id);
+
+    NoteFile? nameMatch;
+    for (final f in files) {
+      if (f.isDeletedLocally) continue;
+      final path = f.path.toLowerCase();
+      if (path == tMd || path == t) return f; // 전체 경로 일치 우선
+      final name = f.name.toLowerCase();
+      if (name == tMd || name == t) nameMatch ??= f;
+      if (t.contains('/') && path.endsWith('/$tMd')) nameMatch ??= f;
+    }
+    return nameMatch;
+  }
+
   // ---------- 검색 ----------
 
   /// 파일명과 로컬 초안/캐시 본문에서 검색한다. 서버 검색 API를 사용하지 않는다.

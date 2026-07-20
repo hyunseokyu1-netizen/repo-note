@@ -81,6 +81,8 @@
   "resolveConflict": "Resolve conflict",
   "conflictBanner": "The server file has changed and a conflict occurred. Your content is safely stored locally.",
   "memoHint": "Write your note…",
+  "wikiLinkNotFound": "Note not found: {name}",
+  "@wikiLinkNotFound": {"placeholders": {"name": {"type": "String"}}},
 
   "searchHint": "Search file names or content",
   "noResults": "No results.",

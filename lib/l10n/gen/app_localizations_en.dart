@@ -238,6 +238,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get memoHint => 'Write your note…';
 
   @override
+  String wikiLinkNotFound(String name) {
+    return 'Note not found: $name';
+  }
+
+  @override
   String get searchHint => 'Search file names or content';
 
   @override

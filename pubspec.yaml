@@ -51,6 +51,7 @@ dependencies:
   crypto: ^3.0.7
   package_info_plus: ^10.2.1
   url_launcher: ^6.3.2
+  markdown: ^7.3.1
 
 dev_dependencies:
   flutter_test:

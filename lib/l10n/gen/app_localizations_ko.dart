@@ -235,6 +235,11 @@ class AppLocalizationsKo extends AppLocalizations {
   String get memoHint => '메모를 입력하세요…';
 
   @override
+  String wikiLinkNotFound(String name) {
+    return '노트를 찾을 수 없습니다: $name';
+  }
+
+  @override
   String get searchHint => '파일명 또는 내용 검색';
 
   @override

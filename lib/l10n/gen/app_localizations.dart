@@ -524,6 +524,12 @@ abstract class AppLocalizations {
   /// **'Write your note…'**
   String get memoHint;
 
+  /// No description provided for @wikiLinkNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Note not found: {name}'**
+  String wikiLinkNotFound(String name);
+
   /// No description provided for @searchHint.
   ///
   /// In en, this message translates to:

@@ -15,6 +15,7 @@ import '../../file_browser/data/notes_repository.dart';
 import '../../settings/presentation/settings_controller.dart';
 import '../../sync/data/sync_coordinator.dart';
 import '../../sync/domain/sync_result.dart';
+import 'wiki_link_markdown.dart';
 
 /// 편집 화면 저장 상태.
 enum EditorStatus {
@@ -44,7 +45,9 @@ class _EditorPageState extends ConsumerState<EditorPage>
 
   NoteFile? _file;
   EditorStatus _status = EditorStatus.saved;
-  bool _preview = false;
+
+  /// 기본은 보기(미리보기) 모드. 빈 노트는 편집 모드로 시작한다.
+  bool _preview = true;
   bool _loading = true;
   String? _loadError;
   String _lastSavedText = '';
@@ -94,6 +97,8 @@ class _EditorPageState extends ConsumerState<EditorPage>
         _textController.text = note.content;
         _lastSavedText = note.content;
         _loading = false;
+        // 내용이 없는 새 노트는 바로 쓸 수 있게 편집 모드로 연다.
+        if (note.content.trim().isEmpty) _preview = false;
         _status = switch (note.status) {
           SyncStatus.conflict => EditorStatus.conflict,
           SyncStatus.failed => EditorStatus.syncFailed,
@@ -183,6 +188,24 @@ class _EditorPageState extends ConsumerState<EditorPage>
     if (result == SyncResult.conflict && manual) {
       _openConflict();
     }
+  }
+
+  /// 미리보기에서 [[위키링크]] 칩을 탭하면 해당 노트로 이동한다.
+  Future<void> _openWikiLink(String target) async {
+    final vault = _vault;
+    if (vault == null) return;
+    final file = await ref
+        .read(notesRepositoryProvider)
+        .findByWikiName(vault, target);
+    if (!mounted) return;
+    if (file == null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(_l10n.wikiLinkNotFound(target))));
+      return;
+    }
+    if (file.id == widget.fileId) return; // 자기 자신이면 무시
+    await context.push('/editor?fileId=${file.id}');
   }
 
   Future<void> _openConflict() async {
@@ -306,6 +329,13 @@ class _EditorPageState extends ConsumerState<EditorPage>
                         ? Markdown(
                             data: _textController.text,
                             padding: const EdgeInsets.all(16),
+                            inlineSyntaxes: [WikiLinkSyntax()],
+                            builders: {
+                              'wikilink': WikiLinkBuilder(
+                                colorScheme: Theme.of(context).colorScheme,
+                                onTap: _openWikiLink,
+                              ),
+                            },
                           )
                         : Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 12),
