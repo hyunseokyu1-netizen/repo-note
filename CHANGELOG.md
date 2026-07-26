@@ -2,6 +2,18 @@
 
 All notable changes to RepoNote are documented in this file.
 
+## 1.0.4 (2026-07-26)
+
+### Fixed
+- 편집 중 텍스트를 선택하고 "전체 선택"을 눌러도 잘라내기/복사 등 편집 툴바가
+  그대로 유지된다. 전체 선택 시 툴바를 화면 상단에 표시해 키보드에 가리지 않는다.
+- The text-selection toolbar (cut/copy/…) now stays visible after "Select all"; on
+  select-all it appears at the top of the screen so it isn't hidden by the keyboard.
+
+### Changed
+- 편집 화면 하단의 어색한 여백을 없애 마지막 줄과 키보드 사이가 자연스러워졌다.
+- Removed the awkward empty gap between the last line and the keyboard in the editor.
+
 ## 1.0.3 (2026-07-20)
 
 ### Added

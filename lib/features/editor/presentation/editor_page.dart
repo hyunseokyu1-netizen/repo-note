@@ -208,6 +208,61 @@ class _EditorPageState extends ConsumerState<EditorPage>
     await context.push('/editor?fileId=${file.id}');
   }
 
+  /// 선택 텍스트 툴바를 직접 구성한다.
+  ///
+  /// 1) "전체 선택"을 누르면 안드로이드 기본 동작은 선택만 갱신하고 툴바를
+  ///    다시 띄우지 않아 곧바로 복사·잘라내기를 못 한다. 선택 반영 다음
+  ///    프레임에 툴바를 강제로 다시 열어 해결한다.
+  /// 2) 전체 선택 상태에서는 선택 영역이 화면 아래까지 걸쳐 툴바가 키보드에
+  ///    가려지므로, 앵커를 화면 상단으로 옮겨 항상 잘 보이게 한다. 상단으로
+  ///    옮기면 ⋮(더보기) 목록도 아래로 펼칠 공간이 충분해, 번역·AI 앱이
+  ///    많아도 Flutter 기본 오버플로 메뉴가 그대로 잘 보인다.
+  Widget _buildContextMenu(
+    BuildContext context,
+    EditableTextState editableTextState,
+  ) {
+    final value = editableTextState.textEditingValue;
+    final selection = value.selection;
+    final isSelectAll =
+        selection.isValid &&
+        selection.start == 0 &&
+        selection.end == value.text.length &&
+        value.text.isNotEmpty;
+
+    // "전체 선택" 버튼만 눌렀을 때 툴바를 다시 열도록 감싸고, 나머지 항목은
+    // 그대로 둔다. 넘치는 항목은 Flutter 기본 오버플로(⋮)가 처리한다.
+    final items = editableTextState.contextMenuButtonItems.map((item) {
+      if (item.type != ContextMenuButtonType.selectAll) return item;
+      return ContextMenuButtonItem(
+        label: item.label,
+        type: item.type,
+        onPressed: () {
+          item.onPressed?.call();
+          Future.delayed(const Duration(milliseconds: 50), () {
+            if (editableTextState.mounted) editableTextState.showToolbar();
+          });
+        },
+      );
+    }).toList();
+
+    // 전체 선택 시에는 툴바를 앱바 바로 아래(화면 상단)에 고정한다.
+    final TextSelectionToolbarAnchors anchors;
+    if (isSelectAll) {
+      final media = MediaQuery.of(context);
+      final topY = media.viewPadding.top + kToolbarHeight + 12;
+      anchors = TextSelectionToolbarAnchors(
+        primaryAnchor: Offset(media.size.width / 2, topY),
+      );
+    } else {
+      anchors = editableTextState.contextMenuAnchors;
+    }
+
+    return AdaptiveTextSelectionToolbar.buttonItems(
+      anchors: anchors,
+      buttonItems: items,
+    );
+  }
+
   Future<void> _openConflict() async {
     await context.push('/conflict?fileId=${widget.fileId}');
     if (mounted) {
@@ -338,6 +393,9 @@ class _EditorPageState extends ConsumerState<EditorPage>
                             },
                           )
                         : Padding(
+                            // 편집 캔버스는 키보드 위까지 자연스럽게 채운다.
+                            // 전체 선택 시 툴바 가림 문제는 상단 앵커로
+                            // 해결하므로 하단에 별도 여백을 두지 않는다.
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: TextField(
                               controller: _textController,
@@ -347,6 +405,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
                               textAlignVertical: TextAlignVertical.top,
                               keyboardType: TextInputType.multiline,
                               style: const TextStyle(fontSize: 16, height: 1.5),
+                              contextMenuBuilder: _buildContextMenu,
                               decoration: InputDecoration(
                                 border: InputBorder.none,
                                 hintText: _l10n.memoHint,

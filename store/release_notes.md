@@ -4,6 +4,30 @@
 
 ---
 
+## v1.0.4 (2026-07-26)
+
+### 한국어 (ko-KR)
+
+```
+v1.0.4 업데이트
+
+• 텍스트를 선택하고 "전체 선택"을 눌러도 잘라내기·복사 메뉴가 사라지지
+  않습니다. 전체 선택 시 메뉴가 화면 위에 떠서 키보드에 가리지 않아요
+• 편집 화면 마지막 줄과 키보드 사이 여백을 자연스럽게 다듬었습니다
+```
+
+### English (en-US)
+
+```
+v1.0.4 update
+
+• The cut/copy menu no longer disappears after "Select all". On select-all
+  it now appears at the top of the screen so the keyboard can't cover it
+• Tidied the spacing between the last line and the keyboard in the editor
+```
+
+---
+
 ## v1.0.3 (2026-07-20)
 
 ### 한국어 (ko-KR)
