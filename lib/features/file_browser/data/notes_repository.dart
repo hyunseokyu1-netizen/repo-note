@@ -90,13 +90,60 @@ class NotesRepository {
       );
     }
 
-    // 서버 목록에 없는 로컬 전용/삭제 대기 파일 병합
-    final locals = await _listLocalFiles(vault, dirPath);
+    // 서버 목록에 없는 로컬 파일 병합.
+    // 동기화 완료 상태인데 서버에 없으면 PC 등 다른 곳에서 이동/삭제된 것이므로
+    // 로컬 메타데이터를 정리하고, 로컬 전용/삭제 대기 파일만 남긴다.
     final remotePaths = result.map((e) => e.fullPath).toSet();
+    final remoteDirs = result.where((e) => e.isDir).map((e) => e.name).toSet();
+    final locals = await _listLocalFiles(vault, dirPath);
     for (final l in locals) {
-      if (!remotePaths.contains(l.fullPath)) result.add(l);
+      if (remotePaths.contains(l.fullPath)) continue;
+      final id = l.fileId;
+      if (id != null && await _isStaleSynced(id)) {
+        await _purgeLocal(id);
+        continue;
+      }
+      result.add(l);
     }
+    await _purgeStaleInMissingDirs(vault, dirPath, remoteDirs);
     return result;
+  }
+
+  /// 서버에 사라진 하위 폴더에 속한 동기화 완료 파일을 정리한다 (폴더째 이동한 경우).
+  Future<void> _purgeStaleInMissingDirs(
+    VaultConfig vault,
+    String dirPath,
+    Set<String> remoteDirs,
+  ) async {
+    final prefix = dirPath.isEmpty ? '' : '$dirPath/';
+    final files = await _db.filesInVault(vault.id);
+    for (final f in files) {
+      if (!f.path.startsWith(prefix)) continue;
+      final rest = f.path.substring(prefix.length);
+      final slash = rest.indexOf('/');
+      if (slash < 0) continue; // 직접 자식은 위에서 처리됨
+      if (remoteDirs.contains(rest.substring(0, slash))) continue;
+      if (await _isStaleSynced(f.id)) await _purgeLocal(f.id);
+    }
+  }
+
+  /// 서버에는 없지만 로컬에 동기화 완료로 남아 있고 수정 초안도 없는 파일인지.
+  Future<bool> _isStaleSynced(String fileId) async {
+    final file = await _db.getFile(fileId);
+    if (file == null || file.syncStatus != SyncStatus.synced) return false;
+    final draft = await _db.getDraft(fileId);
+    return draft == null || !draft.isDirty;
+  }
+
+  /// 파일의 로컬 흔적(캐시·초안·작업·충돌·메타데이터)을 모두 지운다.
+  Future<void> _purgeLocal(String fileId) async {
+    final file = await _db.getFile(fileId);
+    if (file == null) return;
+    await _cache.delete(file.vaultId, file.path);
+    await _db.deleteDraft(fileId);
+    await _db.deleteJobsForFile(fileId);
+    await _db.deleteConflict(fileId);
+    await _db.deleteFileRow(fileId);
   }
 
   /// 오프라인용: 로컬 DB 메타데이터에서 폴더 내용을 구성한다.
@@ -326,10 +373,7 @@ class NotesRepository {
     if (file == null) return;
     if (file.remoteSha == null) {
       // 서버에 없는 로컬 전용 파일은 즉시 삭제
-      await _cache.delete(file.vaultId, file.path);
-      await _db.deleteDraft(fileId);
-      await _db.deleteJobsForFile(fileId);
-      await _db.deleteFileRow(fileId);
+      await _purgeLocal(fileId);
       return;
     }
     await _db.upsertFile(

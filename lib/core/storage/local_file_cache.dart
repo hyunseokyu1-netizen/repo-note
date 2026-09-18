@@ -8,6 +8,11 @@ import 'package:path_provider/path_provider.dart';
 /// Markdown 원문 파일 캐시.
 /// 파일명 충돌 방지를 위해 vaultId + 경로를 해시한 내부 경로를 사용한다.
 class LocalFileCache {
+  /// [baseDir]를 넘기면 앱 지원 디렉토리 대신 그 경로를 사용한다 (테스트용).
+  LocalFileCache({Directory? baseDir}) {
+    _baseDir = baseDir;
+  }
+
   Directory? _baseDir;
 
   Future<Directory> _base() async {
