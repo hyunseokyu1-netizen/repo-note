@@ -4,6 +4,34 @@
 
 ---
 
+## v1.0.5 (2026-09-19)
+
+### 한국어 (ko-KR)
+
+```
+v1.0.5 업데이트
+
+• PC에서 노트를 다른 폴더로 옮기거나 삭제한 뒤 앱에서 새로고침하면,
+  이제 이전 위치의 노트가 바로 사라집니다. 더 이상 캐시를 지우지
+  않아도 됩니다
+• 폴더째 옮긴 경우도 정리됩니다
+• 아직 업로드하지 않은 수정본이 있는 노트는 그대로 유지됩니다
+```
+
+### English (en-US)
+
+```
+v1.0.5 update
+
+• Notes moved to another folder or deleted from your PC now disappear
+  from their old location as soon as you refresh — no more clearing
+  the cache
+• Whole-folder moves are handled too
+• Notes with unsynced local edits are kept as they are
+```
+
+---
+
 ## v1.0.4 (2026-07-26)
 
 ### 한국어 (ko-KR)

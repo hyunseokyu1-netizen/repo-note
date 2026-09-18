@@ -2,6 +2,17 @@
 
 All notable changes to RepoNote are documented in this file.
 
+## 1.0.5 (2026-09-19)
+
+### Fixed
+- PC 등 다른 곳에서 노트를 다른 폴더로 옮기거나 삭제한 뒤 푸시하면, 앱에서 목록을
+  새로고침했을 때 이전 위치의 노트가 그대로 남아 있던 문제를 수정했다. 이제 캐시를
+  지우지 않아도 바로 새 위치로 반영된다. 폴더째 옮긴 경우도 정리된다.
+  아직 업로드하지 않은 수정본이 있는 노트는 그대로 유지된다.
+- Notes moved to another folder or deleted from a PC (then pushed) no longer linger at
+  their old location after refreshing in the app — no need to clear the cache anymore.
+  Whole-folder moves are handled too. Notes with unsynced local edits are kept.
+
 ## 1.0.4 (2026-07-26)
 
 ### Fixed
