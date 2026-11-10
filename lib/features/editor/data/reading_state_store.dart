@@ -113,7 +113,8 @@ class ResumableScrollController extends ScrollController {
   double lastOffset = 0;
 
   void _track() {
-    if (hasClients) lastOffset = position.pixels;
+    // 스크롤 뷰가 교체되는 프레임에는 잠깐 두 개가 붙어 있을 수 있다.
+    if (positions.length == 1) lastOffset = position.pixels;
   }
 
   @override

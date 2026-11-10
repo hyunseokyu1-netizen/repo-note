@@ -228,6 +228,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get closeKeyboard => 'Close keyboard';
 
   @override
+  String get findInNote => 'Find in note';
+
+  @override
+  String get findHint => 'Find';
+
+  @override
+  String get findPrevious => 'Previous';
+
+  @override
+  String get findNext => 'Next';
+
+  @override
+  String get findClose => 'Close find';
+
+  @override
   String get resolveConflict => 'Resolve conflict';
 
   @override

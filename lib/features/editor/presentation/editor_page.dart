@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -16,6 +17,7 @@ import '../../settings/presentation/settings_controller.dart';
 import '../../sync/data/sync_coordinator.dart';
 import '../../sync/domain/sync_result.dart';
 import '../data/reading_state_store.dart';
+import 'find_in_note.dart';
 import 'wiki_link_markdown.dart';
 
 /// 편집 화면 저장 상태.
@@ -43,7 +45,7 @@ class EditorPage extends ConsumerStatefulWidget {
 
 class _EditorPageState extends ConsumerState<EditorPage>
     with WidgetsBindingObserver {
-  final _textController = TextEditingController();
+  final _textController = FindHighlightController();
   final _saveDebouncer = Debouncer(const Duration(milliseconds: 600));
   Debouncer? _syncDebouncer;
 
@@ -53,6 +55,14 @@ class _EditorPageState extends ConsumerState<EditorPage>
   final _positionDebouncer = Debouncer(const Duration(milliseconds: 400));
   late final ReadingStateStore _readingStore;
   String _lastSavedPosition = '';
+
+  // 문서에서 찾기
+  final _findField = TextEditingController();
+  final _editFieldKey = GlobalKey();
+  bool _finding = false;
+  String _findQuery = '';
+  int _findCount = 0;
+  int _findIndex = -1;
 
   NoteFile? _file;
   EditorStatus _status = EditorStatus.saved;
@@ -108,6 +118,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
     // 마지막 변경사항을 유실 없이 저장 (fire-and-forget)
     _persistIfChanged();
     _textController.dispose();
+    _findField.dispose();
     super.dispose();
   }
 
@@ -165,10 +176,209 @@ class _EditorPageState extends ConsumerState<EditorPage>
     }
   }
 
+  // ---------- 문서에서 찾기 ----------
+
+  void _openFind() => setState(() => _finding = true);
+
+  void _closeFind() {
+    _findField.clear();
+    _textController.setHighlights(const [], -1);
+    setState(() {
+      _finding = false;
+      _findQuery = '';
+      _findCount = 0;
+      _findIndex = -1;
+    });
+  }
+
+  void _onFindQueryChanged(String query) {
+    setState(() => _findQuery = query);
+    // 보기 모드는 PreviewFindLayer가 렌더링 결과에서 직접 찾는다.
+    if (!_preview) _refreshEditFind(fromViewport: true);
+  }
+
+  void _findStep(int delta) {
+    if (_findCount == 0) return;
+    final next = (_findIndex + delta) % _findCount;
+    setState(() => _findIndex = next < 0 ? next + _findCount : next);
+    if (!_preview) {
+      _textController.setHighlights(_textController.matches, _findIndex);
+      _revealEditMatch();
+    }
+  }
+
+  void _onPreviewFindResults(int count, int index) {
+    if (!mounted || (count == _findCount && index == _findIndex)) return;
+    setState(() {
+      _findCount = count;
+      _findIndex = index;
+    });
+  }
+
+  RenderEditable? get _renderEditable {
+    RenderEditable? found;
+    void visit(Element element) {
+      if (found != null) return;
+      final renderObject = element.renderObject;
+      if (element is RenderObjectElement && renderObject is RenderEditable) {
+        found = renderObject;
+        return;
+      }
+      element.visitChildren(visit);
+    }
+
+    _editFieldKey.currentContext?.visitChildElements(visit);
+    return found;
+  }
+
+  /// 편집 모드 찾기 결과를 다시 계산한다. [fromViewport]면 지금 보고 있는
+  /// 위치 이후의 첫 항목을, 아니면 기존 선택을 유지한다.
+  void _refreshEditFind({required bool fromViewport}) {
+    final matches = findMatches(_textController.text, _findQuery);
+    int index;
+    if (matches.isEmpty) {
+      index = -1;
+    } else if (fromViewport) {
+      final editable = _renderEditable;
+      final topOffset = editable == null || !editable.hasSize
+          ? 0
+          : editable
+                .getPositionForPoint(editable.localToGlobal(Offset.zero))
+                .offset;
+      index = firstMatchFrom(matches, (m) => m.start >= topOffset);
+    } else {
+      index = _findIndex.clamp(0, matches.length - 1);
+    }
+    _textController.setHighlights(matches, index);
+    setState(() {
+      _findCount = matches.length;
+      _findIndex = index;
+    });
+    if (fromViewport) _revealEditMatch();
+  }
+
+  void _revealEditMatch() {
+    final editable = _renderEditable;
+    final matches = _textController.matches;
+    if (editable == null ||
+        !editable.hasSize ||
+        !_editScroll.hasClients ||
+        _findIndex < 0 ||
+        _findIndex >= matches.length) {
+      return;
+    }
+    // 캐럿 사각형은 화면(뷰포트) 기준이라 현재 스크롤 값을 더해 준다.
+    final caret = editable.getLocalRectForCaret(
+      TextPosition(offset: matches[_findIndex].start),
+    );
+    final scrolled = _editScroll.position.pixels;
+    revealInScrollView(
+      _editScroll,
+      caret.top + scrolled,
+      caret.bottom + scrolled,
+    );
+  }
+
+  void _toggleMode() {
+    setState(() => _preview = !_preview);
+    _savePosition();
+    if (_finding && !_preview) {
+      // 편집 필드가 배치된 뒤에 위치를 계산할 수 있다.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _finding && !_preview) {
+          _refreshEditFind(fromViewport: true);
+        }
+      });
+    }
+  }
+
+  PreferredSizeWidget _buildFindBar(BuildContext context) {
+    final theme = Theme.of(context);
+    return AppBar(
+      leading: IconButton(
+        tooltip: _l10n.findClose,
+        icon: const Icon(Icons.close),
+        onPressed: _closeFind,
+      ),
+      titleSpacing: 0,
+      title: TextField(
+        controller: _findField,
+        autofocus: true,
+        textInputAction: TextInputAction.search,
+        onChanged: _onFindQueryChanged,
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          hintText: _l10n.findHint,
+        ),
+      ),
+      actions: [
+        if (_findQuery.isNotEmpty)
+          Center(
+            child: Text(
+              '${_findIndex + 1}/$_findCount',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: _findCount == 0
+                    ? theme.colorScheme.error
+                    : theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+        IconButton(
+          tooltip: _l10n.findPrevious,
+          icon: const Icon(Icons.keyboard_arrow_up),
+          onPressed: _findCount == 0 ? null : () => _findStep(-1),
+        ),
+        IconButton(
+          tooltip: _l10n.findNext,
+          icon: const Icon(Icons.keyboard_arrow_down),
+          onPressed: _findCount == 0 ? null : () => _findStep(1),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreview(BuildContext context) {
+    final builders = {
+      'wikilink': WikiLinkBuilder(
+        colorScheme: Theme.of(context).colorScheme,
+        onTap: _openWikiLink,
+      ),
+    };
+    if (!_finding) {
+      return Markdown(
+        data: _textController.text,
+        controller: _previewScroll,
+        padding: const EdgeInsets.all(16),
+        inlineSyntaxes: [WikiLinkSyntax()],
+        builders: builders,
+      );
+    }
+    // 찾기 중에는 글자 위치를 알아야 하므로 문서 전체를 한 번에 배치한다.
+    // 블록 구성이 같아 스크롤 위치는 그대로 이어진다.
+    return SingleChildScrollView(
+      controller: _previewScroll,
+      padding: const EdgeInsets.all(16),
+      child: PreviewFindLayer(
+        query: _findQuery,
+        data: _textController.text,
+        index: _findIndex,
+        scrollController: _previewScroll,
+        topInset: 16,
+        onResults: _onPreviewFindResults,
+        child: MarkdownBody(
+          data: _textController.text,
+          inlineSyntaxes: [WikiLinkSyntax()],
+          builders: builders,
+        ),
+      ),
+    );
+  }
+
   void _onChanged(String text) {
     if (_status != EditorStatus.conflict) {
       setState(() => _status = EditorStatus.savingLocal);
     }
+    if (_finding) _refreshEditFind(fromViewport: false);
     _saveDebouncer.run(_persistIfChanged);
   }
 
@@ -349,127 +559,138 @@ class _EditorPageState extends ConsumerState<EditorPage>
       return idx < 0 ? '/' : '/${file.path.substring(0, idx)}';
     }();
 
-    return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              file?.name ?? '…',
-              style: const TextStyle(fontSize: 16),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-            Text(
-              '$dirPath · ${_statusLabel(_status)}',
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: _statusColor(context)),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ),
-        actions: [
-          IconButton(
-            tooltip: _preview ? _l10n.editTooltip : _l10n.previewTooltip,
-            icon: Icon(
-              _preview ? Icons.edit_outlined : Icons.visibility_outlined,
-            ),
-            onPressed: () {
-              setState(() => _preview = !_preview);
-              _savePosition();
-            },
-          ),
-          IconButton(
-            tooltip: _l10n.syncNow,
-            icon: const Icon(Icons.sync),
-            onPressed: () => _sync(manual: true),
-          ),
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              switch (value) {
-                case 'keyboard':
-                  FocusScope.of(context).unfocus();
-                case 'conflict':
-                  _openConflict();
-              }
-            },
-            itemBuilder: (context) => [
-              PopupMenuItem(
-                value: 'keyboard',
-                child: Text(_l10n.closeKeyboard),
-              ),
-              if (_status == EditorStatus.conflict)
-                PopupMenuItem(
-                  value: 'conflict',
-                  child: Text(_l10n.resolveConflict),
+    return PopScope(
+      // 찾기 중 뒤로 가기는 화면을 닫지 않고 찾기만 닫는다.
+      canPop: !_finding,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && _finding) _closeFind();
+      },
+      child: Scaffold(
+        appBar: _finding
+            ? _buildFindBar(context)
+            : AppBar(
+                title: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      file?.name ?? '…',
+                      style: const TextStyle(fontSize: 16),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      '$dirPath · ${_statusLabel(_status)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: _statusColor(context),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
                 ),
-            ],
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _loadError != null
-            ? Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24),
-                  child: Text(_loadError!),
-                ),
-              )
-            : Column(
-                children: [
-                  if (_status == EditorStatus.conflict)
-                    MaterialBanner(
-                      content: Text(_l10n.conflictBanner),
-                      leading: const Icon(Icons.warning_amber),
-                      actions: [
-                        TextButton(
-                          onPressed: _openConflict,
+                actions: [
+                  IconButton(
+                    tooltip: _preview
+                        ? _l10n.editTooltip
+                        : _l10n.previewTooltip,
+                    icon: Icon(
+                      _preview
+                          ? Icons.edit_outlined
+                          : Icons.visibility_outlined,
+                    ),
+                    onPressed: _toggleMode,
+                  ),
+                  IconButton(
+                    tooltip: _l10n.syncNow,
+                    icon: const Icon(Icons.sync),
+                    onPressed: () => _sync(manual: true),
+                  ),
+                  PopupMenuButton<String>(
+                    onSelected: (value) {
+                      switch (value) {
+                        case 'find':
+                          _openFind();
+                        case 'keyboard':
+                          FocusScope.of(context).unfocus();
+                        case 'conflict':
+                          _openConflict();
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem(
+                        value: 'find',
+                        child: Text(_l10n.findInNote),
+                      ),
+                      PopupMenuItem(
+                        value: 'keyboard',
+                        child: Text(_l10n.closeKeyboard),
+                      ),
+                      if (_status == EditorStatus.conflict)
+                        PopupMenuItem(
+                          value: 'conflict',
                           child: Text(_l10n.resolveConflict),
                         ),
-                      ],
-                    ),
-                  Expanded(
-                    child: _preview
-                        ? Markdown(
-                            data: _textController.text,
-                            controller: _previewScroll,
-                            padding: const EdgeInsets.all(16),
-                            inlineSyntaxes: [WikiLinkSyntax()],
-                            builders: {
-                              'wikilink': WikiLinkBuilder(
-                                colorScheme: Theme.of(context).colorScheme,
-                                onTap: _openWikiLink,
-                              ),
-                            },
-                          )
-                        : Padding(
-                            // 편집 캔버스는 키보드 위까지 자연스럽게 채운다.
-                            // 전체 선택 시 툴바 가림 문제는 상단 앵커로
-                            // 해결하므로 하단에 별도 여백을 두지 않는다.
-                            padding: const EdgeInsets.symmetric(horizontal: 12),
-                            child: TextField(
-                              controller: _textController,
-                              scrollController: _editScroll,
-                              onChanged: _onChanged,
-                              maxLines: null,
-                              expands: true,
-                              textAlignVertical: TextAlignVertical.top,
-                              keyboardType: TextInputType.multiline,
-                              style: const TextStyle(fontSize: 16, height: 1.5),
-                              contextMenuBuilder: _buildContextMenu,
-                              decoration: InputDecoration(
-                                border: InputBorder.none,
-                                hintText: _l10n.memoHint,
-                              ),
-                            ),
-                          ),
+                    ],
                   ),
                 ],
               ),
+        body: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _loadError != null
+              ? Center(
+                  child: Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: Text(_loadError!),
+                  ),
+                )
+              : Column(
+                  children: [
+                    if (_status == EditorStatus.conflict)
+                      MaterialBanner(
+                        content: Text(_l10n.conflictBanner),
+                        leading: const Icon(Icons.warning_amber),
+                        actions: [
+                          TextButton(
+                            onPressed: _openConflict,
+                            child: Text(_l10n.resolveConflict),
+                          ),
+                        ],
+                      ),
+                    Expanded(
+                      child: _preview
+                          ? _buildPreview(context)
+                          : Padding(
+                              // 편집 캔버스는 키보드 위까지 자연스럽게 채운다.
+                              // 전체 선택 시 툴바 가림 문제는 상단 앵커로
+                              // 해결하므로 하단에 별도 여백을 두지 않는다.
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                              ),
+                              child: TextField(
+                                key: _editFieldKey,
+                                controller: _textController,
+                                scrollController: _editScroll,
+                                onChanged: _onChanged,
+                                maxLines: null,
+                                expands: true,
+                                textAlignVertical: TextAlignVertical.top,
+                                keyboardType: TextInputType.multiline,
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  height: 1.5,
+                                ),
+                                contextMenuBuilder: _buildContextMenu,
+                                decoration: InputDecoration(
+                                  border: InputBorder.none,
+                                  hintText: _l10n.memoHint,
+                                ),
+                              ),
+                            ),
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }

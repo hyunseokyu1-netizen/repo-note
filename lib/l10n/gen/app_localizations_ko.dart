@@ -226,6 +226,21 @@ class AppLocalizationsKo extends AppLocalizations {
   String get closeKeyboard => '키보드 닫기';
 
   @override
+  String get findInNote => '문서에서 찾기';
+
+  @override
+  String get findHint => '찾을 내용';
+
+  @override
+  String get findPrevious => '이전';
+
+  @override
+  String get findNext => '다음';
+
+  @override
+  String get findClose => '찾기 닫기';
+
+  @override
   String get resolveConflict => '충돌 해결';
 
   @override

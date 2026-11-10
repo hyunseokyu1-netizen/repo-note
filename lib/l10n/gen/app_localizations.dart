@@ -506,6 +506,36 @@ abstract class AppLocalizations {
   /// **'Close keyboard'**
   String get closeKeyboard;
 
+  /// No description provided for @findInNote.
+  ///
+  /// In en, this message translates to:
+  /// **'Find in note'**
+  String get findInNote;
+
+  /// No description provided for @findHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Find'**
+  String get findHint;
+
+  /// No description provided for @findPrevious.
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get findPrevious;
+
+  /// No description provided for @findNext.
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get findNext;
+
+  /// No description provided for @findClose.
+  ///
+  /// In en, this message translates to:
+  /// **'Close find'**
+  String get findClose;
+
   /// No description provided for @resolveConflict.
   ///
   /// In en, this message translates to:
