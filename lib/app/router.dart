@@ -34,8 +34,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/editor',
-        builder: (context, state) =>
-            EditorPage(fileId: state.uri.queryParameters['fileId'] ?? ''),
+        builder: (context, state) => EditorPage(
+          fileId: state.uri.queryParameters['fileId'] ?? '',
+          resume: state.uri.queryParameters['resume'] == '1',
+        ),
       ),
       GoRoute(path: '/search', builder: (context, state) => const SearchPage()),
       GoRoute(

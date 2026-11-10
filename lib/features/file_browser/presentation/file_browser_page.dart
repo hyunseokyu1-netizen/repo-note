@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +13,7 @@ import '../../../core/storage/sync_enums.dart';
 import '../../../core/utils/file_name_validator.dart';
 import '../../../l10n/gen/app_localizations.dart';
 import '../../auth/presentation/session_controller.dart';
+import '../../editor/data/reading_state_store.dart';
 import '../../settings/presentation/settings_controller.dart';
 import '../../sync/data/sync_coordinator.dart';
 import '../../sync/domain/sync_result.dart';
@@ -58,9 +61,22 @@ class _FileBrowserPageState extends ConsumerState<FileBrowserPage> {
   void initState() {
     super.initState();
     Future.microtask(() async {
+      unawaited(_resumeLastNote());
       await _loadDir(_rootPath);
       await _autoSyncPending();
     });
+  }
+
+  /// 앱이 꺼지기 전에 보던 노트가 있으면 바로 다시 연다.
+  Future<void> _resumeLastNote() async {
+    final vault = _vault;
+    if (vault == null) return;
+    final fileId = await ref
+        .read(readingStateStoreProvider)
+        .takeResumeTarget(vault.id);
+    if (fileId == null || !mounted) return;
+    await context.push('/editor?fileId=$fileId&resume=1');
+    if (mounted) await _refreshAll();
   }
 
   // ---------- 데이터 로드 ----------

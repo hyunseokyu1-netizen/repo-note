@@ -15,6 +15,7 @@ import '../../file_browser/data/notes_repository.dart';
 import '../../settings/presentation/settings_controller.dart';
 import '../../sync/data/sync_coordinator.dart';
 import '../../sync/domain/sync_result.dart';
+import '../data/reading_state_store.dart';
 import 'wiki_link_markdown.dart';
 
 /// 편집 화면 저장 상태.
@@ -29,9 +30,12 @@ enum EditorStatus {
 }
 
 class EditorPage extends ConsumerStatefulWidget {
-  const EditorPage({super.key, required this.fileId});
+  const EditorPage({super.key, required this.fileId, this.resume = false});
 
   final String fileId;
+
+  /// 앱 재시작 후 "이어서 보기"로 열린 경우. 보던 모드(보기/편집)까지 복원한다.
+  final bool resume;
 
   @override
   ConsumerState<EditorPage> createState() => _EditorPageState();
@@ -42,6 +46,13 @@ class _EditorPageState extends ConsumerState<EditorPage>
   final _textController = TextEditingController();
   final _saveDebouncer = Debouncer(const Duration(milliseconds: 600));
   Debouncer? _syncDebouncer;
+
+  // 읽던 위치 기억: 보기/편집 모드 각각의 스크롤 위치를 따로 추적한다.
+  final _previewScroll = ResumableScrollController();
+  final _editScroll = ResumableScrollController();
+  final _positionDebouncer = Debouncer(const Duration(milliseconds: 400));
+  late final ReadingStateStore _readingStore;
+  String _lastSavedPosition = '';
 
   NoteFile? _file;
   EditorStatus _status = EditorStatus.saved;
@@ -60,7 +71,27 @@ class _EditorPageState extends ConsumerState<EditorPage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _readingStore = ref.read(readingStateStoreProvider);
+    _previewScroll.addListener(_onScrolled);
+    _editScroll.addListener(_onScrolled);
     Future.microtask(_open);
+  }
+
+  void _onScrolled() => _positionDebouncer.run(_savePosition);
+
+  /// 현재 스크롤 위치·모드를 저장한다. 앱이 언제 죽어도 이어 볼 수 있게
+  /// 스크롤이 멈출 때마다, 그리고 백그라운드 전환·화면 종료 시 호출된다.
+  void _savePosition() {
+    if (_loading || _loadError != null) return;
+    final position = ReadingPosition(
+      previewOffset: _previewScroll.lastOffset,
+      editOffset: _editScroll.lastOffset,
+      preview: _preview,
+    );
+    final encoded = position.encode();
+    if (encoded == _lastSavedPosition) return;
+    _lastSavedPosition = encoded;
+    _readingStore.savePosition(widget.fileId, position);
   }
 
   @override
@@ -68,6 +99,12 @@ class _EditorPageState extends ConsumerState<EditorPage>
     WidgetsBinding.instance.removeObserver(this);
     _saveDebouncer.cancel();
     _syncDebouncer?.cancel();
+    _positionDebouncer.cancel();
+    _savePosition();
+    // 목록으로 돌아갔으니 다음 실행 때는 이 노트를 자동으로 열지 않는다.
+    _readingStore.clearLastOpenIf(widget.fileId);
+    _previewScroll.dispose();
+    _editScroll.dispose();
     // 마지막 변경사항을 유실 없이 저장 (fire-and-forget)
     _persistIfChanged();
     _textController.dispose();
@@ -81,6 +118,8 @@ class _EditorPageState extends ConsumerState<EditorPage>
         state == AppLifecycleState.inactive) {
       _saveDebouncer.cancel();
       _persistIfChanged();
+      _positionDebouncer.cancel();
+      _savePosition();
     }
   }
 
@@ -91,8 +130,17 @@ class _EditorPageState extends ConsumerState<EditorPage>
       final note = await ref
           .read(notesRepositoryProvider)
           .openFile(vault, widget.fileId);
+      final saved = await _readingStore.position(widget.fileId);
       if (!mounted) return;
+      _readingStore.setLastOpen(widget.fileId);
       setState(() {
+        if (saved != null) {
+          _previewScroll.lastOffset = saved.previewOffset;
+          _editScroll.lastOffset = saved.editOffset;
+          _lastSavedPosition = saved.encode();
+          // 평소엔 보기 모드로 열고, 이어서 보기일 때만 보던 모드를 복원한다.
+          if (widget.resume) _preview = saved.preview;
+        }
         _file = note.file;
         _textController.text = note.content;
         _lastSavedText = note.content;
@@ -206,6 +254,8 @@ class _EditorPageState extends ConsumerState<EditorPage>
     }
     if (file.id == widget.fileId) return; // 자기 자신이면 무시
     await context.push('/editor?fileId=${file.id}');
+    // 링크로 열었던 노트에서 돌아왔으니 다시 이 노트가 "보던 문서"다.
+    if (mounted) _readingStore.setLastOpen(widget.fileId);
   }
 
   /// 선택 텍스트 툴바를 직접 구성한다.
@@ -326,7 +376,10 @@ class _EditorPageState extends ConsumerState<EditorPage>
             icon: Icon(
               _preview ? Icons.edit_outlined : Icons.visibility_outlined,
             ),
-            onPressed: () => setState(() => _preview = !_preview),
+            onPressed: () {
+              setState(() => _preview = !_preview);
+              _savePosition();
+            },
           ),
           IconButton(
             tooltip: _l10n.syncNow,
@@ -383,6 +436,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
                     child: _preview
                         ? Markdown(
                             data: _textController.text,
+                            controller: _previewScroll,
                             padding: const EdgeInsets.all(16),
                             inlineSyntaxes: [WikiLinkSyntax()],
                             builders: {
@@ -399,6 +453,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             child: TextField(
                               controller: _textController,
+                              scrollController: _editScroll,
                               onChanged: _onChanged,
                               maxLines: null,
                               expands: true,
