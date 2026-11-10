@@ -2,6 +2,24 @@
 
 All notable changes to RepoNote are documented in this file.
 
+## 1.0.6 (2026-11-10)
+
+### Added
+- 이어보기: 노트를 보던 중 앱이 종료되면 다음 실행 때 그 노트를 보던 위치에서 다시
+  연다. 목록으로 돌아간 뒤 종료했다면 목록에서 시작한다. 노트별 스크롤 위치도 기억해,
+  목록에서 다시 열어도 마지막으로 보던 곳에서 시작한다.
+- 문서에서 찾기: 노트 화면 메뉴(⋮)에서 찾기 바를 열어 보기·편집 모드 모두에서 검색할
+  수 있다. 일치 항목 강조, 현재/전체 개수 표시, 이전·다음 이동을 지원한다.
+- Resume reading: if the app is closed while a note is open, the next launch reopens
+  that note where you left off. If you had gone back to the list, it starts at the list.
+  Scroll position is remembered per note, so reopening a note also resumes there.
+- Find in note: open the find bar from the note menu (⋮) to search in both preview and
+  edit modes, with match highlighting, a current/total counter and previous/next.
+
+### Changed
+- 보기↔편집 모드를 전환해도 각 모드의 스크롤 위치가 유지된다.
+- Switching between preview and edit modes now keeps each mode's scroll position.
+
 ## 1.0.5 (2026-09-19)
 
 ### Fixed

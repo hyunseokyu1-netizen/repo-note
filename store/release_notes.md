@@ -4,6 +4,36 @@
 
 ---
 
+## v1.0.6 (2026-11-10)
+
+### 한국어 (ko-KR)
+
+```
+v1.0.6 업데이트
+
+• 이어보기: 노트를 보다가 앱이 꺼져도, 다시 켜면 보던 노트가
+  보던 위치에서 바로 열립니다
+• 노트마다 마지막으로 읽던 위치를 기억합니다
+• 문서에서 찾기: 노트 화면의 ⋮ 메뉴에서 단어를 검색하세요.
+  일치하는 곳을 모두 표시하고 이전·다음으로 이동할 수 있습니다
+• 보기·편집 모드를 오가도 스크롤 위치가 유지됩니다
+```
+
+### English (en-US)
+
+```
+v1.0.6 update
+
+• Resume reading: if the app closes while you're reading, it reopens
+  the same note right where you left off
+• Your last reading position is remembered for every note
+• Find in note: search for a word from the ⋮ menu on the note screen.
+  All matches are highlighted and you can jump to previous/next
+• Scroll position is kept when switching between preview and edit
+```
+
+---
+
 ## v1.0.5 (2026-09-19)
 
 ### 한국어 (ko-KR)
