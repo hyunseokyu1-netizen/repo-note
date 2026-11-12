@@ -18,6 +18,7 @@ import '../../sync/data/sync_coordinator.dart';
 import '../../sync/domain/sync_result.dart';
 import '../data/reading_state_store.dart';
 import 'find_in_note.dart';
+import 'mode_scroll_sync.dart';
 import 'wiki_link_markdown.dart';
 
 /// 편집 화면 저장 상태.
@@ -54,11 +55,23 @@ class _EditorPageState extends ConsumerState<EditorPage>
   final _editScroll = ResumableScrollController();
   final _positionDebouncer = Debouncer(const Duration(milliseconds: 400));
   late final ReadingStateStore _readingStore;
+
+  // dispose()에서는 ref를 쓸 수 없어, 마지막 저장에 필요한 것을 미리 잡아 둔다.
+  late final NotesRepository _notes;
+  VaultConfig? _openedVault;
   String _lastSavedPosition = '';
 
   // 문서에서 찾기
   final _findField = TextEditingController();
   final _editFieldKey = GlobalKey();
+
+  // 보기↔편집 전환 시 읽던 곳 맞추기
+  final _previewAreaKey = GlobalKey();
+  final _previewBodyKey = GlobalKey();
+
+  /// 전환 직후 위치를 맞추는 한 프레임 동안 true. 그동안은 내용을 숨겨
+  /// 엉뚱한 위치가 잠깐 보이는 깜빡임을 막는다.
+  bool _aligning = false;
   bool _finding = false;
   String _findQuery = '';
   int _findCount = 0;
@@ -82,6 +95,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _readingStore = ref.read(readingStateStoreProvider);
+    _notes = ref.read(notesRepositoryProvider);
     _previewScroll.addListener(_onScrolled);
     _editScroll.addListener(_onScrolled);
     Future.microtask(_open);
@@ -116,7 +130,11 @@ class _EditorPageState extends ConsumerState<EditorPage>
     _previewScroll.dispose();
     _editScroll.dispose();
     // 마지막 변경사항을 유실 없이 저장 (fire-and-forget)
-    _persistIfChanged();
+    final vault = _openedVault;
+    final text = _textController.text;
+    if (vault != null && text != _lastSavedText) {
+      _notes.saveDraft(vault, widget.fileId, text).ignore();
+    }
     _textController.dispose();
     _findField.dispose();
     super.dispose();
@@ -137,6 +155,7 @@ class _EditorPageState extends ConsumerState<EditorPage>
   Future<void> _open() async {
     final vault = _vault;
     if (vault == null) return;
+    _openedVault = vault;
     try {
       final note = await ref
           .read(notesRepositoryProvider)
@@ -279,17 +298,106 @@ class _EditorPageState extends ConsumerState<EditorPage>
     );
   }
 
+  static double _fraction(ScrollController controller) {
+    if (!controller.hasClients) return 0;
+    final position = controller.position;
+    final max = position.maxScrollExtent;
+    return max <= 0 ? 0 : (position.pixels / max).clamp(0.0, 1.0);
+  }
+
+  static void _jumpClamped(ScrollController controller, double target) {
+    if (!controller.hasClients) return;
+    final position = controller.position;
+    controller.jumpTo(
+      target.clamp(position.minScrollExtent, position.maxScrollExtent),
+    );
+  }
+
+  /// 보기↔편집을 전환하면서, 읽던 곳이 반대 모드에서도 같은 자리에 오게 한다.
+  ///
+  /// 두 모드는 글자 크기와 마크다운 기호 유무가 달라 스크롤 값이 서로 통하지
+  /// 않는다. 그래서 전환 직전 화면 맨 위 근처의 글자를 단서로 잡아 두고,
+  /// 전환 후 반대 모드에서 그 글자를 찾아 스크롤한다. 못 찾으면 진행률로 맞춘다.
   void _toggleMode() {
-    setState(() => _preview = !_preview);
-    _savePosition();
-    if (_finding && !_preview) {
-      // 편집 필드가 배치된 뒤에 위치를 계산할 수 있다.
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _finding && !_preview) {
-          _refreshEditFind(fromViewport: true);
-        }
-      });
+    final toEdit = _preview;
+    var anchors = const <ScrollAnchor>[];
+    var fraction = 0.0;
+
+    if (toEdit) {
+      fraction = _fraction(_previewScroll);
+      final area = _previewAreaKey.currentContext?.findRenderObject();
+      if (area is RenderBox && area.hasSize) anchors = previewAnchors(area);
+    } else {
+      fraction = _fraction(_editScroll);
+      final editable = _renderEditable;
+      if (editable != null && editable.hasSize) {
+        final top = editable
+            .getPositionForPoint(editable.localToGlobal(Offset.zero))
+            .offset;
+        anchors = editAnchors(
+          _textController.text,
+          top,
+          editable.size.height,
+          (offset) =>
+              editable.getLocalRectForCaret(TextPosition(offset: offset)).top,
+        );
+      }
     }
+
+    setState(() {
+      _preview = !_preview;
+      _aligning = true;
+    });
+
+    // 반대 모드가 배치된 뒤에야 글자 위치를 알 수 있다.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (toEdit) {
+        _alignEdit(anchors, fraction);
+      } else {
+        _alignPreview(anchors, fraction);
+      }
+      setState(() => _aligning = false);
+      _savePosition();
+      if (_finding && !_preview) _refreshEditFind(fromViewport: true);
+    });
+  }
+
+  void _alignEdit(List<ScrollAnchor> anchors, double fraction) {
+    final editable = _renderEditable;
+    if (editable == null || !editable.hasSize || !_editScroll.hasClients) {
+      return;
+    }
+    final match = locateInSource(_textController.text, anchors, fraction);
+    if (match == null) {
+      _jumpClamped(
+        _editScroll,
+        fraction * _editScroll.position.maxScrollExtent,
+      );
+      return;
+    }
+    final caret = editable.getLocalRectForCaret(
+      TextPosition(offset: match.offset),
+    );
+    _jumpClamped(
+      _editScroll,
+      caret.top + _editScroll.position.pixels - match.dy,
+    );
+  }
+
+  void _alignPreview(List<ScrollAnchor> anchors, double fraction) {
+    final body = _previewBodyKey.currentContext?.findRenderObject();
+    if (body is! RenderBox || !body.hasSize || !_previewScroll.hasClients) {
+      return;
+    }
+    final target = locateInPreview(body, anchors, fraction);
+    _jumpClamped(
+      _previewScroll,
+      target == null
+          ? fraction * _previewScroll.position.maxScrollExtent
+          // 본문 위 여백(16)만큼 스크롤 콘텐츠 좌표가 밀려 있다.
+          : target + 16,
+    );
   }
 
   PreferredSizeWidget _buildFindBar(BuildContext context) {
@@ -344,33 +452,46 @@ class _EditorPageState extends ConsumerState<EditorPage>
         onTap: _openWikiLink,
       ),
     };
-    if (!_finding) {
-      return Markdown(
+    final Widget content;
+    if (!_finding && !_aligning) {
+      content = Markdown(
         data: _textController.text,
         controller: _previewScroll,
         padding: const EdgeInsets.all(16),
         inlineSyntaxes: [WikiLinkSyntax()],
         builders: builders,
       );
-    }
-    // 찾기 중에는 글자 위치를 알아야 하므로 문서 전체를 한 번에 배치한다.
-    // 블록 구성이 같아 스크롤 위치는 그대로 이어진다.
-    return SingleChildScrollView(
-      controller: _previewScroll,
-      padding: const EdgeInsets.all(16),
-      child: PreviewFindLayer(
-        query: _findQuery,
-        data: _textController.text,
-        index: _findIndex,
-        scrollController: _previewScroll,
-        topInset: 16,
-        onResults: _onPreviewFindResults,
+    } else {
+      // 찾기 중이거나 편집에서 막 넘어온 프레임에는 글자 위치를 알아야 하므로
+      // 문서 전체를 한 번에 배치한다. 블록 구성이 같아 스크롤 위치는 그대로
+      // 이어진다.
+      final Widget body = KeyedSubtree(
+        key: _previewBodyKey,
         child: MarkdownBody(
           data: _textController.text,
           inlineSyntaxes: [WikiLinkSyntax()],
           builders: builders,
         ),
-      ),
+      );
+      content = SingleChildScrollView(
+        controller: _previewScroll,
+        padding: const EdgeInsets.all(16),
+        child: _finding
+            ? PreviewFindLayer(
+                query: _findQuery,
+                data: _textController.text,
+                index: _findIndex,
+                scrollController: _previewScroll,
+                topInset: 16,
+                onResults: _onPreviewFindResults,
+                child: body,
+              )
+            : body,
+      );
+    }
+    // 보기 모드에서도 길게 눌러 글자를 선택·복사할 수 있다.
+    return SelectionArea(
+      child: KeyedSubtree(key: _previewAreaKey, child: content),
     );
   }
 
@@ -658,35 +779,38 @@ class _EditorPageState extends ConsumerState<EditorPage>
                         ],
                       ),
                     Expanded(
-                      child: _preview
-                          ? _buildPreview(context)
-                          : Padding(
-                              // 편집 캔버스는 키보드 위까지 자연스럽게 채운다.
-                              // 전체 선택 시 툴바 가림 문제는 상단 앵커로
-                              // 해결하므로 하단에 별도 여백을 두지 않는다.
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 12,
-                              ),
-                              child: TextField(
-                                key: _editFieldKey,
-                                controller: _textController,
-                                scrollController: _editScroll,
-                                onChanged: _onChanged,
-                                maxLines: null,
-                                expands: true,
-                                textAlignVertical: TextAlignVertical.top,
-                                keyboardType: TextInputType.multiline,
-                                style: const TextStyle(
-                                  fontSize: 16,
-                                  height: 1.5,
+                      child: Opacity(
+                        opacity: _aligning ? 0 : 1,
+                        child: _preview
+                            ? _buildPreview(context)
+                            : Padding(
+                                // 편집 캔버스는 키보드 위까지 자연스럽게 채운다.
+                                // 전체 선택 시 툴바 가림 문제는 상단 앵커로
+                                // 해결하므로 하단에 별도 여백을 두지 않는다.
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
                                 ),
-                                contextMenuBuilder: _buildContextMenu,
-                                decoration: InputDecoration(
-                                  border: InputBorder.none,
-                                  hintText: _l10n.memoHint,
+                                child: TextField(
+                                  key: _editFieldKey,
+                                  controller: _textController,
+                                  scrollController: _editScroll,
+                                  onChanged: _onChanged,
+                                  maxLines: null,
+                                  expands: true,
+                                  textAlignVertical: TextAlignVertical.top,
+                                  keyboardType: TextInputType.multiline,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    height: 1.5,
+                                  ),
+                                  contextMenuBuilder: _buildContextMenu,
+                                  decoration: InputDecoration(
+                                    border: InputBorder.none,
+                                    hintText: _l10n.memoHint,
+                                  ),
                                 ),
                               ),
-                            ),
+                      ),
                     ),
                   ],
                 ),
