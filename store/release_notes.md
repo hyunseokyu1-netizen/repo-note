@@ -4,6 +4,34 @@
 
 ---
 
+## v1.0.7 (2026-11-12)
+
+### 한국어 (ko-KR)
+
+```
+v1.0.7 업데이트
+
+• 보기 모드에서도 글자를 길게 눌러 선택하고 복사할 수 있습니다
+• 보기·편집 모드를 바꿔도 문서 처음으로 돌아가지 않고,
+  읽던 곳이 그대로 보입니다
+• 글을 쓰고 바로 뒤로 가면 마지막 글자가 저장되지 않을 수
+  있던 문제를 고쳤습니다
+```
+
+### English (en-US)
+
+```
+v1.0.7 update
+
+• You can now long-press to select and copy text in preview mode
+• Switching between preview and edit keeps your place instead of
+  jumping back to the top of the note
+• Fixed an issue where the last few characters could be lost when
+  going back right after typing
+```
+
+---
+
 ## v1.0.6 (2026-11-10)
 
 ### 한국어 (ko-KR)

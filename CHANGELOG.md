@@ -2,6 +2,27 @@
 
 All notable changes to RepoNote are documented in this file.
 
+## 1.0.7 (2026-11-12)
+
+### Added
+- 보기(미리보기) 모드에서 글자를 길게 눌러 선택하고 복사할 수 있다. 여러 문단에 걸친
+  선택도 가능하다.
+- In preview mode you can now long-press to select and copy text, including selections
+  that span several paragraphs.
+
+### Changed
+- 보기↔편집 모드를 전환하면 문서 처음이 아니라 읽던 곳이 그대로 보인다. 전환 직전
+  화면 맨 위의 글자를 반대 모드에서 찾아 맞추며, 찾지 못하면 스크롤 진행률로 맞춘다.
+- Switching between preview and edit now keeps your place instead of jumping to the top.
+  The text at the top of the screen is located in the other mode; if it can't be found,
+  the scroll progress is used instead.
+
+### Fixed
+- 편집 화면을 닫을 때 마지막 입력을 저장하는 과정이 예외로 중단되던 문제를 수정했다.
+  입력 직후 바로 뒤로 가도 마지막 글자가 저장된다.
+- Fixed the final save failing with an exception when leaving the editor, which could
+  drop the last few characters typed right before going back.
+
 ## 1.0.6 (2026-11-10)
 
 ### Added
